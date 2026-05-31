@@ -12,9 +12,9 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'start_date': datetime(2026, 1, 1),
-    'retries': 1,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5),
-
+    'schedule_interval': '@weekly',
 }
 
 # DAG definition

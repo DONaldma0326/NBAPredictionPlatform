@@ -81,7 +81,13 @@ This project demonstrates a **hybrid data platform**:
   - **Team performance** – win/loss streaks, offensive/defensive ratings.
 - Outputs to `s3://your-bucket/gold/` in Parquet
 
-### 4️⃣ Visualization
+### 4️⃣ Feature Store
+- **Daily Glue job** reads the Silver games Delta table and builds two feature outputs:
+  - **Historical game feature table** – one row per team-game with rolling pregame features and the final result label.
+  - **Inference snapshot table** – current team-state features that can be joined with a live schedule before prediction.
+- Both tables update daily, with the historical table upserting only the new game rows.
+
+### 5️⃣ Visualization
 - BI tool connects to the AWS athena
 - Users can run SQL queries directly on Glue Data catalog
 - Dashboard with interactive filter, Player Comparison and Team trend
@@ -157,3 +163,58 @@ Team Trends: Line chart of points per game over the last 10 seasons.
 
 
 ![alt text](Image/image.png)
+
+
+You are an experience software engineer.
+I am trying to build a system that predict the NBA game out come.
+With historical data, realtime data.
+for historical data i will build a postgres datawarehouse. That i am going to load the
+for realtime data i will use nba_api.live.nba.endpoints
+The logic flow of the model should be
+
+
+
+AWS setup
+
+
+Get a first time setup
+fault torlance idenpont , airflow
+Bronze every day
+xxxx-yyyy_mm_dd.csv
+
+
+glue
+Silver
+delta lake extracted from Bronze
+1:1 Games playbyplay Player Team
+
+glue
+Gold
+Metrics
+
+Athena
+Metabase
+
+
+open an EC2 install Python, Docker and the needed package
+
+
+download all season data and upload to S3
+create medaliaz structure
+bronze/raw/players
+bronze/raw/games
+bronze/raw/team
+
+Glue (init load)
+
+silver/players (Delta Lake)
+silver/games (Delta Lake)
+silver/team (Delta Lake)
+
+
+(run some init transformation to deduplicate and suitable for SCD2)
+
+install nba_api and pandas in airflow-dag-processor and airflow-worker
+
+
+--conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore
