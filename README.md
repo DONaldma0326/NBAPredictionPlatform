@@ -218,3 +218,85 @@ install nba_api and pandas in airflow-dag-processor and airflow-worker
 
 
 --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore
+
+
+
+leagueId seasonYear             gameDate      gameId         gameCode  \
+0       00    2025-26  10/02/2025 00:00:00  0012500008  20251002/PHINYK   
+1       00    2025-26  10/03/2025 00:00:00  0012500001  20251003/PHXLAL   
+2       00    2025-26  10/03/2025 00:00:00  0012500009  20251003/MELNOP   
+3       00    2025-26  10/04/2025 00:00:00  0012500010  20251004/NYKPHI   
+4       00    2025-26  10/04/2025 00:00:00  0012500011  20251004/SEMNOP   
+
+   gameStatus        gameStatusText  gameSequence           gameDateEst  \
+0           3                 Final             1  2025-10-02T00:00:00Z   
+1           3                 Final             2  2025-10-03T00:00:00Z   
+2           3  Final                            1  2025-10-03T00:00:00Z   
+3           3                 Final             1  2025-10-04T00:00:00Z   
+4           3  Final                            5  2025-10-04T00:00:00Z   
+
+            gameTimeEst       gameDateTimeEst           gameDateUTC  \
+0  1900-01-01T12:00:00Z  2025-10-02T12:00:00Z  2025-10-02T04:00:00Z   
+1  1900-01-01T22:00:00Z  2025-10-03T22:00:00Z  2025-10-03T04:00:00Z   
+2  1900-01-01T05:30:00Z  2025-10-03T05:30:00Z  2025-10-03T04:00:00Z   
+3  1900-01-01T11:00:00Z  2025-10-04T11:00:00Z  2025-10-04T04:00:00Z   
+4  1900-01-01T23:00:00Z  2025-10-04T23:00:00Z  2025-10-04T04:00:00Z   
+
+            gameTimeUTC       gameDateTimeUTC          awayTeamTime  \
+0  1900-01-01T16:00:00Z  2025-10-02T16:00:00Z  2025-10-02T12:00:00Z   
+1  1900-01-01T02:00:00Z  2025-10-04T02:00:00Z  2025-10-03T19:00:00Z   
+2  1900-01-01T09:30:00Z  2025-10-03T09:30:00Z  2025-10-03T19:30:00Z   
+3  1900-01-01T15:00:00Z  2025-10-04T15:00:00Z  2025-10-04T11:00:00Z   
+4  1900-01-01T03:00:00Z  2025-10-05T03:00:00Z  2025-10-05T14:00:00Z   
+
+           homeTeamTime  day  monthNum  weekNumber weekName ifNecessary  \
+0  2025-10-02T12:00:00Z  Thu        10           0                false   
+1  2025-10-03T19:00:00Z  Fri        10           0                false   
+2  2025-10-03T04:30:00Z  Fri        10           0                false   
+3  2025-10-04T11:00:00Z  Sat        10           0                false   
+4  2025-10-04T22:00:00Z  Sat        10           0                false   
+
+  seriesGameNumber  gameLabel        gameSubLabel    seriesText  \
+0                   Preseason  NBA Abu Dhabi Game  Neutral Site   
+1                   Preseason                                     
+2                   Preseason  NBA Melbourne Game                 
+3                   Preseason  NBA Abu Dhabi Game  Neutral Site   
+4                   Preseason  NBA Melbourne Game                 
+
+         arenaName arenaState    arenaCity postponedStatus branchLink  \
+0     Etihad Arena               Abu Dhabi               N              
+1   Acrisure Arena         CA  Palm Desert               N              
+2  Rod Laver Arena               Melbourne               N              
+3     Etihad Arena               Abu Dhabi               N              
+4  Rod Laver Arena               Melbourne               N              
+
+    gameSubtype  isNeutral  homeTeam_teamId homeTeam_teamName  \
+0  Global Games       True       1610612752            Knicks   
+1                    False       1610612747            Lakers   
+2                    False       1610612740          Pelicans   
+3  Global Games       True       1610612755             76ers   
+4                    False       1610612740          Pelicans   
+
+  homeTeam_teamCity homeTeam_teamTricode homeTeam_teamSlug  homeTeam_wins  \
+0          New York                  NYK            knicks              1   
+1       Los Angeles                  LAL            lakers              0   
+2       New Orleans                  NOP          pelicans              1   
+3      Philadelphia                  PHI            sixers              0   
+4       New Orleans                  NOP          pelicans              2   
+
+   homeTeam_losses  homeTeam_score  homeTeam_seed  awayTeam_teamId  \
+0                0              99              0       1610612755   
+1                1              81              0       1610612756   
+2                0             107              0            15016   
+3                2             104              0       1610612752   
+4                0             127              0            50013   
+
+  awayTeam_teamName     awayTeam_teamCity  
+0             76ers          Philadelphia  
+1              Suns               Phoenix  
+2            United             Melbourne  
+3            Knicks              New York  
+4           Phoenix  South East Melbourne
+
+
+streamlit run dev
