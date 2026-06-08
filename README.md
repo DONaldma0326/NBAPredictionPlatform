@@ -129,15 +129,15 @@ User Interface (Streamlit): The Streamlit application acts as the interactive fr
 
 ## Result
 Airflow webapi server
-![alt text](image/airflow.png)
+![alt text](Image/airflow.png)
 
 Streamlit web app
 
 
-![alt text](image/streamlit1.png)
+![alt text](Image/streamlit1.png)
 
-![alt text](image/streamlit2.png)
+![alt text](Image/streamlit2.png)
 
 MLflow portal
 
-![alt text](image/MLflow.png)
+![alt text](Image/MLflow.png)
