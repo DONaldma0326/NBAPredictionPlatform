@@ -1,0 +1,17 @@
+
+FROM python:3.14-slim
+
+
+WORKDIR /code
+
+RUN mkdir -p /code/models
+
+COPY api.py app.py requirements.txt .env /code/
+COPY models/* /code/models/
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+EXPOSE 8000
+EXPOSE 8501
+
+CMD ["sh", "-c", "streamlit run app.py --server.port 8501 & uvicorn api:app --host 0.0.0.0 --port 8000"]

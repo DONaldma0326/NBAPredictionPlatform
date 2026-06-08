@@ -47,7 +47,9 @@ def fetch_todays_games_to_s3(**kwargs):
     output_dir = "/tmp/nba_daily_data"
     os.makedirs(output_dir, exist_ok=True)
 
-    pacific = datetime.now(ZoneInfo('America/Los_Angeles'))
+
+    pacific = datetime(kwargs["logical_date"].year, kwargs["logical_date"].month, kwargs["logical_date"].day, tzinfo=ZoneInfo('America/Los_Angeles'))
+   # pacific = datetime.now(ZoneInfo('America/Los_Angeles'))
     today_str = pacific.strftime('%m/%d/%Y')
     filename_today = pacific.strftime('%Y_%m_%d.csv')
     

@@ -5,3 +5,6 @@ data/
 .env
 Airflow/.env
 .DS_Store
+_archive/
+code/__pycache__
+code/.DS_Store

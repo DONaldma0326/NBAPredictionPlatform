@@ -1,45 +1,20 @@
-# 🏀 End-to-End NBA Analytics Data Warehouse
+# NBA Game Prediction Platform
 
-A **fault‑tolerant**, medallion‑architecture data platform that ingests NBA team and player statistics, processes them through AWS S3 and AWS Glue, and serves interactive dashboards via a containerized metabase. Orchestration is handled by **Apache Airflow** (Dockerized), data transformations run on **AWS Glue** (Spark SQL), and a **Metabase** (Dockerized) for Visualize.
 
----
+An end-to-end, fault-tolerant, and scalable MLOps platform that transforms raw NBA data into high-performance predictive features and XGBoost models.
 
-## 📌 Overview
+This end-to-end platform leverages **Delta Lake on AWS S3** to manage data reliability, **Apache Airflow and Glue** for scalable orchestration and data processing, and **FastAPI/Streamlit** for model serving and visualization. The system is built with fault tolerance and MLOps best practices, utilizing **MLflow** for comprehensive experiment tracking and model monitoring.
 
-This project demonstrates a **hybrid data platform**:
-- **Data Lake** on AWS S3 with Madellion architecture.
-- **Serverless processing** with AWS Glue .
-- **Orchestration** via Airflow running in Docker locally for scheduling, monitoring, and failure handling.
-- **Interactive dashboards** built with AWS Athena connected to Metabase that run in local.
+## 📝 Key Engineering Decisions
+**Storage layer**: Implemented a Medallion Architecture (Bronze/Silver/Gold) on AWS S3 using Delta Lake. To support ingesting raw csvs for NBA data and cleaned feature serving data with ACID transcation and schema enforcement.
 
-**Key Features**
-- Medallion architecture (Bronze/Silver/Gold) for data quality and governance.
-- Fault‑tolerant orchestration with Airflow (retries, alerting, idempotency).
-- Containerized control plane – Airflow
-- Interactive BI Dashboard - Metabase
+**Compute & Orchestration**: Built a fault-tolerant orchestration layer using Airflow  for robust workflow management and rich features e.g. backfilling, auto retries. AWS Glue serves as the scalable, serverless engine for data transformation.
 
----
+**Model Inference & Monitoring**: Model serving via FastAPI for the ease of implementation. And adopted MLflow as the production-standard tool for managing the end-to-end ML lifecycle.
 
 ## 🏗️ Architecture
 
-![alt text](Image/image-1.png)
-
-├──► Kaggle Dataset
-
-├──►  Airflow (Docker) 
-
-├──► S3 (Bronze) - raw data landing zone
-
-├──► AWS Glue (Silver) - clean, deduplicate, type cast
-
-├──► S3 (Silver) - cleaned, partitioned Parquet
-
-├──► AWS Glue (Gold) - build aggregated tables
-
-├──► S3 (Gold) - reporting‑ready datasets
-
-└──► Metabase - dashboards & ad‑hoc analysis
-
+![alt text](Image/NBAPredictionPlatform.drawio.png)
 
 
 ---
@@ -48,51 +23,102 @@ This project demonstrates a **hybrid data platform**:
 
 | Component           | Technology                                    | Purpose                                      |
 | ------------------- | --------------------------------------------- | -------------------------------------------- |
-| Orchestration       | Apache Airflow (Docker container)             | Schedule and monitor monthly pipeline runs   |
-| Data Lake Storage   | Amazon S3                                     | Tiered storage: `bronze/`, `silver/`, `gold/`|
-| Data Processing     | AWS Glue (Spark SQL, PySpark)                 | Transform raw data into clean, aggregated tables |
-|  Query Engine | AWS Athena          | Store table schemas, enable SQL queries on S3|
-| Visualization       | Metabase       | Build interactive dashboards                  |
-| Source Data         | Kaggle                                    | Fetch NBA stats    |
-| Container Runtime   | Docker / Docker Compose                        | Run Airflow and Metabase locally  |
+| Orchestration       | Apache Airflow                                | Schedule and monitoring pipeline runs        |
+| Data Lake Storage   | Amazon S3 , Delta Lake                        | Stored api results csvs, ACID compliant and support time travel|
+| Data Processing     | AWS Glue (PySpark)                            | Transform raw data into clean, aggregated tables |
+| Visualization       | Streamlit                                     | Build clean User Interface                           |
+| API                 | Fast API                                      | Model Serving                                 |
+| Model Moitoring     | MLFlow                                        | Monitoring Model Metrics   |
+| Container Runtime   | Docker / Docker Compose                       | Ensure consistent builds  |
 
 ---
+## Model Details
+The project use XGBoost for the NBA game predictions.
 
-## 📦 Pipeline Details
+- XGBoost vs Deep Learning model(nerual network): Provide an interpretable results and is significantly easier to deploy in production-grade environments which allow the project to focus on the operations part of MLOps 
+- Single XGBoost vs Ensemble (XGboost + other e.g. Random forest): 
+I opted for a single optimized XGBoost model rather than an ensemble, as empirical testing showed that the performance gains from ensemble methods did not justify the added devlopment overhead. 
 
-### 1️⃣ Data Ingestion (Bronze)
-- **Airflow DAG** (Docker) triggers monthly (configurable via `schedule_interval`).
-- Uses **Kaggle API** to download the latest NBA dataset (CSV/JSON).
-- Stores raw files into `s3://your-bucket/bronze/` with ingest date by `year` and `month` (e.g., `year=2024/month=02/`).
+Model Development Workflow
+The development lifecycle was structured into  phases:
 
-### 2️⃣ Data Cleansing (Silver)
-- **AWS Glue ETL job** (PySpark script) reads from Bronze.
-- Performs:
-  - Schema enforcement and type casting (e.g., string → integer, date).
-  - Handling missing values (drop or impute).
-  - Deduplication based on game/player IDs.
-  - Handle traded mid season
-- Writes **Parquet** format (optimized for analytics) to `s3://your-bucket/silver/`, partitioned by `season` and `team`.
+1. Feature Engineering & Exploration
+Data Exploration: 
+Conducted manual inspection of raw game datasets to validate schema integrity and identify key statistical distributions.
+
+    Domain-Driven Feature Engineering: Leveraged basketball domain knowledge to craft high-impact features, including:
+
+    Contextual: IsHome flag and Rest Days calculation.
+
+    Statistical: Rolling averages such as FG_PCT over the last 10 games.
+
+    Performance Metrics: WinRate trends derived from the preceding 10-game window.
+
+2. Data Sets Preparation 
+    
+    For model development i have used game data from 2010-11 season to 2025-26 seasons (dated at 2026/05/28). 
+
+    Partitioning Strategy: Data was divided into a 70/20/10 ratio (Train/Test/Eval) per season, ensuring the model generalizes well across different basketball eras and roster changes.
+
+    Seasonal Data Splitting: To prevent data leakage and ensure realistic model evaluation as data may vary across seasons, the dataset was split based on seasons rather than randomized points.
+
+3. Model training & Hyperparameter Optimization
+    
+    The model was implemented using the xgboost package, utilizing a binary:logistic objective function to predict game outcomes.
+    ```
+    # XGBoost model code snippet
+      xgb_model = XGBClassifier(
+          objective="binary:logistic",
+          eval_metric=['logloss', 'auc'],
+          n_estimators=500,
+          learning_rate=0.05,
+          max_depth=7,
+          subsample=0.8,
+          random_state=seed,
+          tree_method="hist", # Optimized for speed on large datasets
+      )
+    ```
+
+    Automated Tuning: I utilized Optuna to execute systematic testing across a defined hyperparameter space. The optimization process focused on **maximizing ROC AUC** and **minimizing Log Loss** to ensure the model remains both discriminative and well-calibrated.
+
+    MLOps Integration: Upon identifying the best-performing hyperparameters, the model configuration and resulting metrics were logged directly into MLflow. By logging the exact parameters and metrics in MLflow, There are a clear audit trail for reproducibility
 
 
-### 3️⃣ Data Aggregation (Gold)
-- **Second Glue job** builds dimensional models:
-  - **Player career stats** – averages per season, shooting percentages.
-  - **Team performance** – win/loss streaks, offensive/defensive ratings.
-- Outputs to `s3://your-bucket/gold/` in Parquet
 
-### 4️⃣ Feature Store
-- **Daily Glue job** reads the Silver games Delta table and builds two feature outputs:
-  - **Historical game feature table** – one row per team-game with rolling pregame features and the final result label.
-  - **Inference snapshot table** – current team-state features that can be joined with a live schedule before prediction.
-- Both tables update daily, with the historical table upserting only the new game rows.
+## 🏗 Data Platform details
 
-### 5️⃣ Visualization
-- BI tool connects to the AWS athena
-- Users can run SQL queries directly on Glue Data catalog
-- Dashboard with interactive filter, Player Comparison and Team trend
+The data pipeline utilizes a Medallion Architecture to ensure data reliability and consistency, moving data through Bronze, Silver, and Gold layers with fault-tolerant orchestration.
 
----
+1. Pipeline Orchestration & Bronze Layer
+
+Ingestion: Airflow triggers a daily Python script to fetch the day's NBA game results.
+
+Fault Tolerance: The pipeline is designed for robustness; Airflow executes an automated cleanup of existing daily data before new downloads, ensuring no duplicates or stale artifacts exist. 
+
+2. Silver Layer: Data Cleansing & Delta Lake
+
+Transformation: Airflow triggers an AWS Glue job, which leverages Apache Spark to process raw CSVs.
+
+Data Quality: During transformation, the job performs schema enforcement and cleans null values.
+
+Idempotency & Partitioning: Data is upserted into Delta Lake to maintain idempotency. Tables are partitioned by season, significantly optimizing query performance for features that rely on filtered historical data.
+
+3. Gold Layer: Feature Store & Data processing
+The Gold layer serves as the refined feature store, powering both real-time inference and historical data for model training:
+
+feature_inference: Stores calculated features aggregated at the individual team level.
+
+feature_team_opponent_winpct: Stores high-level calculated feature data regarding performance between team pairs.
+
+game_history: A comprehensive master table used for continuous training and model versioning.
+
+##  Web App details
+
+The application is fully containerized to ensure consistent behavior across local development and production environments.
+
+Serving Layer (FastAPI): A lightweight, asynchronous FastAPI service serves as the model inference engine. It encapsulates the pre-processing logic, retrieves the required features from the Gold layer, and returns model predictions with low latency.
+
+User Interface (Streamlit): The Streamlit application acts as the interactive frontend. It is decoupled from the model serving logic, communicating with the FastAPI backend to fetch predictions and display them to the user.
 
 ## ⚙️ Fault Tolerance & Reliability
 
@@ -101,202 +127,17 @@ This project demonstrates a **hybrid data platform**:
 - **Idempotent writes** – each run overwrites only the relevant partitions, avoiding duplicates. 
 - **S3 versioning** – enabled on Bronze bucket to recover raw data if needed.
 
----
+## Result
+Airflow webapi server
+![alt text](image/airflow.png)
+
+Streamlit web app
 
 
-### Prerequisites
-- AWS account with permissions for S3, Glue, and Athena.
-- Docker installed.
-- Python installed
+![alt text](image/streamlit1.png)
 
-### To start
+![alt text](image/streamlit2.png)
 
-Create an AWS s3 bucket, Create bronze, silver, gold folder
+MLflow portal
 
-Create an IAM or Use an Existing Role Grant AmazonS3FullAccess and AWSGlueConsoleFullAccess
-create access key
-Keep the access key id and secret
-
-```bash
-cd ./Airflow
-
-docker-compose up -d
-```
-This launches:
-Airflow webserver & scheduler (UI at http://localhost:8080)
-![alt text](Image/image-2.png)
-
-Sign in and create connection
-![alt text](Image/image-3.png)
-
-![alt text](Image/image-4.png)
-insert the key and secret you got in step2
-
-
-
-```bash
-
-docker run -d -p 3000:3000 --name metabase metabase/metabase 
-```
-This lauches:
-metabase dashboard (UI at http://localhost:3000)
-
-![alt text](Image/image-5.png)
-**Sign up may require when first launch
-
-
-![alt text](Image/image-6.png)
-Select Amazon Athena
-Go to the admin portal and select create a database
-Fill the required information
-![alt text](Image/image-7.png)
-The database connection is established and can be used to build dashboard now !!!
-
-📊 Example Dashboard
-
-Player Comparison: Top 10 player with highest 3pt percentage
-
-Leaderboards: Top 10 scorers since 2016.
-
-Team Trends: Line chart of points per game over the last 10 seasons.
-
-
-
-![alt text](Image/image.png)
-
-
-You are an experience software engineer.
-I am trying to build a system that predict the NBA game out come.
-With historical data, realtime data.
-for historical data i will build a postgres datawarehouse. That i am going to load the
-for realtime data i will use nba_api.live.nba.endpoints
-The logic flow of the model should be
-
-
-
-AWS setup
-
-
-Get a first time setup
-fault torlance idenpont , airflow
-Bronze every day
-xxxx-yyyy_mm_dd.csv
-
-
-glue
-Silver
-delta lake extracted from Bronze
-1:1 Games playbyplay Player Team
-
-glue
-Gold
-Metrics
-
-Athena
-Metabase
-
-
-open an EC2 install Python, Docker and the needed package
-
-
-download all season data and upload to S3
-create medaliaz structure
-bronze/raw/players
-bronze/raw/games
-bronze/raw/team
-
-Glue (init load)
-
-silver/players (Delta Lake)
-silver/games (Delta Lake)
-silver/team (Delta Lake)
-
-
-(run some init transformation to deduplicate and suitable for SCD2)
-
-install nba_api and pandas in airflow-dag-processor and airflow-worker
-
-
---conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore
-
-
-
-leagueId seasonYear             gameDate      gameId         gameCode  \
-0       00    2025-26  10/02/2025 00:00:00  0012500008  20251002/PHINYK   
-1       00    2025-26  10/03/2025 00:00:00  0012500001  20251003/PHXLAL   
-2       00    2025-26  10/03/2025 00:00:00  0012500009  20251003/MELNOP   
-3       00    2025-26  10/04/2025 00:00:00  0012500010  20251004/NYKPHI   
-4       00    2025-26  10/04/2025 00:00:00  0012500011  20251004/SEMNOP   
-
-   gameStatus        gameStatusText  gameSequence           gameDateEst  \
-0           3                 Final             1  2025-10-02T00:00:00Z   
-1           3                 Final             2  2025-10-03T00:00:00Z   
-2           3  Final                            1  2025-10-03T00:00:00Z   
-3           3                 Final             1  2025-10-04T00:00:00Z   
-4           3  Final                            5  2025-10-04T00:00:00Z   
-
-            gameTimeEst       gameDateTimeEst           gameDateUTC  \
-0  1900-01-01T12:00:00Z  2025-10-02T12:00:00Z  2025-10-02T04:00:00Z   
-1  1900-01-01T22:00:00Z  2025-10-03T22:00:00Z  2025-10-03T04:00:00Z   
-2  1900-01-01T05:30:00Z  2025-10-03T05:30:00Z  2025-10-03T04:00:00Z   
-3  1900-01-01T11:00:00Z  2025-10-04T11:00:00Z  2025-10-04T04:00:00Z   
-4  1900-01-01T23:00:00Z  2025-10-04T23:00:00Z  2025-10-04T04:00:00Z   
-
-            gameTimeUTC       gameDateTimeUTC          awayTeamTime  \
-0  1900-01-01T16:00:00Z  2025-10-02T16:00:00Z  2025-10-02T12:00:00Z   
-1  1900-01-01T02:00:00Z  2025-10-04T02:00:00Z  2025-10-03T19:00:00Z   
-2  1900-01-01T09:30:00Z  2025-10-03T09:30:00Z  2025-10-03T19:30:00Z   
-3  1900-01-01T15:00:00Z  2025-10-04T15:00:00Z  2025-10-04T11:00:00Z   
-4  1900-01-01T03:00:00Z  2025-10-05T03:00:00Z  2025-10-05T14:00:00Z   
-
-           homeTeamTime  day  monthNum  weekNumber weekName ifNecessary  \
-0  2025-10-02T12:00:00Z  Thu        10           0                false   
-1  2025-10-03T19:00:00Z  Fri        10           0                false   
-2  2025-10-03T04:30:00Z  Fri        10           0                false   
-3  2025-10-04T11:00:00Z  Sat        10           0                false   
-4  2025-10-04T22:00:00Z  Sat        10           0                false   
-
-  seriesGameNumber  gameLabel        gameSubLabel    seriesText  \
-0                   Preseason  NBA Abu Dhabi Game  Neutral Site   
-1                   Preseason                                     
-2                   Preseason  NBA Melbourne Game                 
-3                   Preseason  NBA Abu Dhabi Game  Neutral Site   
-4                   Preseason  NBA Melbourne Game                 
-
-         arenaName arenaState    arenaCity postponedStatus branchLink  \
-0     Etihad Arena               Abu Dhabi               N              
-1   Acrisure Arena         CA  Palm Desert               N              
-2  Rod Laver Arena               Melbourne               N              
-3     Etihad Arena               Abu Dhabi               N              
-4  Rod Laver Arena               Melbourne               N              
-
-    gameSubtype  isNeutral  homeTeam_teamId homeTeam_teamName  \
-0  Global Games       True       1610612752            Knicks   
-1                    False       1610612747            Lakers   
-2                    False       1610612740          Pelicans   
-3  Global Games       True       1610612755             76ers   
-4                    False       1610612740          Pelicans   
-
-  homeTeam_teamCity homeTeam_teamTricode homeTeam_teamSlug  homeTeam_wins  \
-0          New York                  NYK            knicks              1   
-1       Los Angeles                  LAL            lakers              0   
-2       New Orleans                  NOP          pelicans              1   
-3      Philadelphia                  PHI            sixers              0   
-4       New Orleans                  NOP          pelicans              2   
-
-   homeTeam_losses  homeTeam_score  homeTeam_seed  awayTeam_teamId  \
-0                0              99              0       1610612755   
-1                1              81              0       1610612756   
-2                0             107              0            15016   
-3                2             104              0       1610612752   
-4                0             127              0            50013   
-
-  awayTeam_teamName     awayTeam_teamCity  
-0             76ers          Philadelphia  
-1              Suns               Phoenix  
-2            United             Melbourne  
-3            Knicks              New York  
-4           Phoenix  South East Melbourne
-
-
-streamlit run dev
+![alt text](image/MLflow.png)
