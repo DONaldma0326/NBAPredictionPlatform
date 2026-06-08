@@ -134,9 +134,9 @@ Airflow webapi server
 Streamlit web app
 
 
-![alt text](Image/streamlit1.png)
+![alt text](Image/Streamlit1.png)
 
-![alt text](Image/streamlit2.png)
+![alt text](Image/Streamlit2.png)
 
 MLflow portal
 
