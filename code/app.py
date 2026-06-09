@@ -55,6 +55,32 @@ def predict_winner(home_team_id: object, away_team_id: object) -> str:
     return data.get("predicted_winner_abbr", "Unknown")
 
 
+def trigger_retrain(triggered_by: str = "manual") -> dict:
+    response = requests.post(
+        "http://localhost:8000/retrain",
+        json={"triggered_by": triggered_by},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def get_retrain_status() -> dict:
+    response = requests.get("http://localhost:8000/retrain/status", timeout=15)
+    response.raise_for_status()
+    return response.json()
+
+
+def check_model_health(auto_trigger: bool = False) -> dict:
+    response = requests.post(
+        "http://localhost:8000/monitor/model-health",
+        json={"days": 30, "auto_trigger": auto_trigger},
+        timeout=45,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 @st.cache_data(ttl=300)
 def load_latest_mlflow_metrics() -> dict[str, object]:
     base_url = "http://localhost:5001/api/2.0/mlflow"
@@ -187,8 +213,8 @@ def main() -> None:
 
     st.title("NBA Matchups")
 
-    tab_games, tab_results = st.tabs(["Today's Games","Model Results"])
-
+    #tab_games, tab_results, tab_retrain = st.tabs(["Today's Games", "Model Results", "Retraining"])
+    tab_games, tab_results = st.tabs(["Today's Games", "Model Results"]) 
    
 
     with tab_games:
@@ -230,6 +256,44 @@ def main() -> None:
             )
         except (requests.RequestException, ValueError) as exc:
             st.info(f"MLflow metrics unavailable: {exc}")
+
+    # with tab_retrain:
+    #     st.subheader("Retraining control")
+
+    #     col_a, col_b = st.columns(2)
+    #     with col_a:
+    #         if st.button("Check model health", use_container_width=True):
+    #             try:
+    #                 st.session_state["health_report"] = check_model_health(auto_trigger=False)
+    #             except requests.RequestException as exc:
+    #                 st.error(f"Health check failed: {exc}")
+    #     with col_b:
+    #         if st.button("Trigger retraining", use_container_width=True):
+    #             try:
+    #                 st.session_state["retrain_job"] = trigger_retrain("manual")
+    #             except requests.RequestException as exc:
+    #                 st.error(f"Retrain request failed: {exc}")
+
+    #     if st.button("Check health and auto-trigger if needed", use_container_width=True):
+    #         try:
+    #             st.session_state["health_report"] = check_model_health(auto_trigger=True)
+    #         except requests.RequestException as exc:
+    #             st.error(f"Health check failed: {exc}")
+
+    #     try:
+    #         status = get_retrain_status()
+    #         st.markdown("**Latest retrain job**")
+    #         st.json(status)
+    #     except requests.RequestException as exc:
+    #         st.info(f"Retrain status unavailable: {exc}")
+
+    #     if "health_report" in st.session_state:
+    #         st.markdown("**Latest health report**")
+    #         st.json(st.session_state["health_report"])
+
+    #     if "retrain_job" in st.session_state:
+    #         st.markdown("**Latest retrain trigger**")
+    #         st.json(st.session_state["retrain_job"])
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,9 @@
 import os
+import time
 from functools import lru_cache
-from typing import Dict
+from threading import Lock, Thread
+from typing import Any, Dict
+from uuid import uuid4
 
 import awswrangler as wr
 import boto3
@@ -9,6 +12,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from xgboost import XGBClassifier
 from dotenv import load_dotenv
+
+from model_monitor import assess_model_health
+from model_trainer import train_and_promote_model
 
 load_dotenv()
 REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
@@ -68,10 +74,58 @@ AWAY_REQUIRED = [
 ]
 
 app = FastAPI(title="NBA Game Prediction API")
+RETRAIN_JOBS: dict[str, dict[str, Any]] = {}
+RETRAIN_LOCK = Lock()
 
 class PredictRequest(BaseModel):
     home_team_id: int = Field(..., description="Home team ID, e.g. 1610612747")
     away_team_id: int = Field(..., description="Away team ID, e.g. 1610612738")
+
+
+class RetrainRequest(BaseModel):
+    triggered_by: str = Field(default="manual", description="Retrain trigger source")
+    n_trials: int | None = Field(default=None, description="Number of Optuna trials")
+    seed: int | None = Field(default=None, description="Random seed for tuning")
+
+
+class HealthCheckRequest(BaseModel):
+    days: int = Field(default=30, description="Lookback window for drift/performance checks")
+    auto_trigger: bool = Field(default=False, description="Launch retraining if drift is detected")
+
+
+def _set_job(job_id: str, **fields: Any) -> None:
+    with RETRAIN_LOCK:
+        current = RETRAIN_JOBS.get(job_id, {})
+        current.update(fields)
+        RETRAIN_JOBS[job_id] = current
+
+
+def _launch_retrain_job(payload: RetrainRequest) -> dict[str, str]:
+    job_id = uuid4().hex
+    _set_job(
+        job_id,
+        job_id=job_id,
+        status="running",
+        triggered_by=payload.triggered_by,
+        started_at=time.time(),
+        updated_at=time.time(),
+        result=None,
+        error=None,
+    )
+
+    def _runner() -> None:
+        try:
+            result = train_and_promote_model(
+                triggered_by=payload.triggered_by,
+                n_trials=payload.n_trials or int(os.environ.get("OPTUNA_TRIALS", "50")),
+                seed=payload.seed or int(os.environ.get("RANDOM_STATE", "36")),
+            )
+            _set_job(job_id, status="completed", result=result, updated_at=time.time())
+        except Exception as exc:
+            _set_job(job_id, status="failed", error=str(exc), updated_at=time.time())
+
+    Thread(target=_runner, daemon=True).start()
+    return {"job_id": job_id, "status": "running"}
 
 
 def load_model() -> XGBClassifier:
@@ -243,3 +297,36 @@ def predict(payload: PredictRequest) -> Dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/retrain")
+def retrain(payload: RetrainRequest) -> Dict[str, str]:
+    return _launch_retrain_job(payload)
+
+
+@app.get("/retrain/status")
+def retrain_status() -> Dict[str, Any]:
+    with RETRAIN_LOCK:
+        if not RETRAIN_JOBS:
+            return {"job": None}
+        latest_job = max(RETRAIN_JOBS.values(), key=lambda job: job.get("started_at", 0))
+        return {"job": latest_job}
+
+
+@app.get("/retrain/status/{job_id}")
+def retrain_status_by_id(job_id: str) -> Dict[str, Any]:
+    with RETRAIN_LOCK:
+        job = RETRAIN_JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Retrain job not found.")
+    return job
+
+
+@app.post("/monitor/model-health")
+def monitor_model_health(payload: HealthCheckRequest) -> Dict[str, Any]:
+    report = assess_model_health(days=payload.days)
+    response: Dict[str, Any] = {"health": report.as_dict()}
+    if payload.auto_trigger and report.should_retrain:
+        retrain_job = _launch_retrain_job(RetrainRequest(triggered_by="auto-monitor"))
+        response["retrain"] = retrain_job
+    return response
